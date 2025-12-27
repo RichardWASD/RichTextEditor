@@ -1,12 +1,35 @@
 #include "../include/text.h"
 
+struct termios original_termios;
+
+void disableRawMode(){ // disable after done writing
+    tcsetattr(STDIN_FILENO,TCSAFLUSH,&original_termios);
+    
+}
+
+int enableRawMode(){
+    /*We want to change our terminal settings so we can start displaying real time feed */
+ 
+    tcgetattr(STDIN_FILENO,&original_termios);
+    atexit(disableRawMode);
+
+    struct termios raw = original_termios;
+    tcgetattr(STDIN_FILENO, &raw);
+    raw.c_lflag &= ~(ECHO); // disables echo mode / ability to see text in terminal
+    tcsetattr(STDIN_FILENO,TCSAFLUSH,&raw); // modifes with updated vals
+    
+    return 0;
+}
+
+
 int main (){
+    enableRawMode();
 
     FILE *file_pointer ; 
     char input_text[1000]; // TODO: OUR Input should be able to write the entire file/ Large or no limit 
     char outfile_name[50];
     char ch; 
-    // char final_output_name;
+
 
 
     printf("Rich Editor!\n");
@@ -18,39 +41,21 @@ int main (){
 
     file_pointer = fopen(outfile_name,"w"); // Pointer creates the output file 
 
-    printf("To stop writing to file press '~' key");
+    printf("To stop writing to file press '~' key\n");
 
-    while(file_pointer == NULL){
+    if(file_pointer == NULL){
         exit(1);
     }
 
-    // fgets(input_text, sizeof(input_text),stdin); // for entire line of text (including whitespace!)
-    // fprintf(file_pointer, "%s", input_text); // writes to file. Ability to format data/ use multiple data types 
-    // fputs(input_text,file_pointer); // Writes text
-    
-    while(1){ // Todo: make condition for EOF reached.
-        ch = getchar(); 
+    char read_c ;
+    while(read(STDIN_FILENO, &read_c, 1) == 1 && read_c != '~'){ // Todo: make condition for EOF reached.
 
-        if(ch == '~'){ // end key
-            break;
-        }
-        if(ch == EOF){
-            break;
-        }
-
-        // fgets(input_text, sizeof(input_text),stdin);
-        fputc(ch,file_pointer); // use putc because we used char to consume a char to read for end condition which we need to add back/ have it included in string
-        
+        fputc(read_c,file_pointer); // use putc because we used char to consume a char to read for end condition which we need to add back/ have it included in string
         
     }
-
 
     fclose(file_pointer);
     return 0;
 }
 
 
-
-/*
-Implement further
-*/
