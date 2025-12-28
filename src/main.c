@@ -1,9 +1,16 @@
 #include "../include/text.h"
 
 struct termios original_termios; // original state of command line 
+/*** Terminal settings ***/
+void death(const char *s){
+    perror(s);
+    exit(1);
 
+}
 void disableRawMode(){ // disable after done writing
-    tcsetattr(STDIN_FILENO,TCSAFLUSH,&original_termios);
+    if(tcsetattr(STDIN_FILENO,TCSAFLUSH,&original_termios) == -1){
+        death("tcsetattr");
+    }
     
 }
 
@@ -16,7 +23,8 @@ int enableRawMode(){
     refrence : https://man7.org/linux/man-pages/man3/termios.3.html 
     */
  
-    tcgetattr(STDIN_FILENO,&original_termios);
+    if(tcgetattr(STDIN_FILENO,&original_termios) ==-1){death("tcgetattr");}
+
     atexit(disableRawMode);
 
     struct termios raw = original_termios;
@@ -25,8 +33,10 @@ int enableRawMode(){
     raw.c_oflag &= ~(OPOST);
     raw.c_lflag &= ~(ECHO | ICANON| ISIG| IEXTEN); // disables echo mode / ability to see text in terminal /ctrl-v, ...
     raw.c_cflag |= ~(CS8);
-    tcsetattr(STDIN_FILENO,TCSAFLUSH,&raw); // modifes with updated vals
+    raw.c_cc[VMIN] = 0; 
+    raw.c_cc[VTIME] = 1;
     
+    if(tcsetattr(STDIN_FILENO,TCSAFLUSH,&raw) == -1 ){death("tcsetattr");} // modifes with updated vals or error
     return 0;
 }
 
@@ -57,14 +67,19 @@ int main (){
     }
 
     char read_c ;
-    while(read(STDIN_FILENO, &read_c, 1) == 1 && read_c != '~'){ // Todo: make condition for EOF reached.
+    while(1){ 
+
+        read_c = '\0';
+        if(read(STDIN_FILENO, &read_c, 1) == -1 && errno != EAGAIN){death("read");}
+
         if(iscntrl(read_c)){
             printf("%d\r\n",read_c);//tester
         }
         else{
-            fputc(read_c,file_pointer); // use putc because we used char to consume a char to read for end condition which we need to add back/ have it included in string
+         //   fputc(read_c,file_pointer); // use putc because we used char to consume a char to read for end condition which we need to add back/ have it included in string
             printf("%d, ('%c')\r\n",read_c,read_c);//tester
         }
+        if(read_c == '~'){break;}
        
         
     }

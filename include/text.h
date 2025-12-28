@@ -5,3 +5,4 @@
 #include <termios.h> // for echoing
 #include <ctype.h>
 #include <stdio.h>
+#include <errno.h>
