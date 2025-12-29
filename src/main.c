@@ -1,4 +1,5 @@
 #include "../include/text.h"
+#include <sys/ioctl.h>
 struct editorConfig{
     int screenRows;
     int screenCols;
@@ -71,11 +72,33 @@ void editorProccessKey(){ // wait for keypress deal with later
     }
 }
 
+int getCursorPos(int *rows, int *cols){
+    char buff[32];
+    unsigned int i = 0;
+    if(write(STDIN_FILENO, "\x1b[6n", 4) != 4){ return -1;}
+
+    printf("\r\n");
+    char c;
+    while(i < sizeof(buff)-1){
+        if(read(STDIN_FILENO, &c, 1) != 1){ break; }
+        if(buff[i] == 'R'){break;}
+        i++;
+    }
+    buff[i] = '\0';
+    if(buff[0]!= '\x1b' || buff[1] != -1){return -1;}
+    if(sscanf(&buff[2] , "%d;%d", rows, cols) != 2){return -1;}
+
+    return 0;
+}
+
 int getWindowSize(int *rows, int *cols){
     struct winsize ws;
     
-    if(ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0){
-        return -1;
+    if(1 ||ioctl(STDIN_FILENO, TIOCGWINSZ , &ws) == -1 || ws.ws_col == 0){
+        if(write(STDIN_FILENO, "\x1b[999C\x1b[999B" ,12) != 12){ // moves cursor bottom right 
+            return -1;
+        }
+        return getCursorPos(rows,cols);
     }
     else{
         *rows = ws.ws_row; 
@@ -141,29 +164,31 @@ void editorPrompt(char *prompt, char *input, size_t size){
 }
 
 int main (){
-    enableRawMode();
-    initEditor();
-
+    
     FILE *file_pointer ; 
     char input_text[1000]; // TODO: OUR Input should be able to write the entire file/ Large or no limit 
     char outfile_name[50];
     char ch; 
-
-
-
+    
+    
+    
     printf("Rich Editor!\n");
     editorPrompt("Please Enter The Name of You're New File and End it with a '.txt': ", outfile_name, sizeof(outfile_name) );
-
+    
     int c; 
-
+    
     file_pointer = fopen(outfile_name,"w"); // Pointer creates the output file 
-
+    
     
     if(file_pointer == NULL){
         death("Error opening file");
     }
     
     write(STDIN_FILENO,"To stop writing to file press CTRL + q\n", 35);
+   
+    enableRawMode();
+    initEditor();
+   
     char read_c ;
     while(1){ 
 

@@ -21,9 +21,11 @@
     	- [x] Disable ctrl-z ,c,s,q,v
  
     - [x] "Raw mode" 
-    - [ ] More implementations
+    - [ ] fix current roadblocks
 
     ## Roadblocks
 
     - Although I have implemented fputc and the writing every char in file, if I want to read live input from key board I must use something else -> Update: Used read() for reading keyboard presses
     - ROADBLOCK : Pressing backspace gives us a random symbol in output -> Fixed but now cant go to next line
+
+    - After i press enter to create file i just type in the terminal with no stoping + doestn create the file 
