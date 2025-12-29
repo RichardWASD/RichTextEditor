@@ -1,14 +1,21 @@
 #include "../include/text.h"
+struct editorConfig{
+    int screenRows;
+    int screenCols;
+    struct termios original_termios; // original state of command line
+ };
+ struct editorConfig E;
 
-struct termios original_termios; // original state of command line 
 /*** Terminal settings ***/
 void death(const char *s){
+    write(STDIN_FILENO, "\x1b[2J",4);  
+    write(STDIN_FILENO, "\x1b[H", 3); 
     perror(s);
     exit(1);
 
 }
 void disableRawMode(){ // disable after done writing
-    if(tcsetattr(STDIN_FILENO,TCSAFLUSH,&original_termios) == -1){
+    if(tcsetattr(STDIN_FILENO,TCSAFLUSH,&E.original_termios) == -1){
         death("tcsetattr");
     }
     
@@ -23,11 +30,11 @@ int enableRawMode(){
     refrence : https://man7.org/linux/man-pages/man3/termios.3.html 
     */
  
-    if(tcgetattr(STDIN_FILENO,&original_termios) ==-1){death("tcgetattr");}
+    if(tcgetattr(STDIN_FILENO,&E.original_termios) ==-1){death("tcgetattr");}
 
     atexit(disableRawMode);
 
-    struct termios raw = original_termios;
+    struct termios raw = E.original_termios;
     tcgetattr(STDIN_FILENO, &raw);
     raw.c_iflag &= ~(BRKINT|ICRNL|ISTRIP|ICRNL|IXON); // ctrl-q,s disable flow  
     raw.c_oflag &= ~(OPOST);
@@ -40,9 +47,102 @@ int enableRawMode(){
     return 0;
 }
 
+char editorReadKey(){ // wait for keypress then deal with it later
+    char c;
+    int nread;
+    while((nread == read(STDIN_FILENO, &c, 1) ) != 1 ){
+        if(nread == -1 && errno != EAGAIN){
+           death("read"); 
+        }
+    }
+    return c;
+}
+
+/*** Input ***/
+void editorProccessKey(){ // wait for keypress deal with later
+    char c = editorReadKey();
+
+    switch (c){
+        case CTRL_KEY('q'):
+        write(STDIN_FILENO, "\x1b[2J",4);  
+        write(STDIN_FILENO, "\x1b[H", 3); 
+        exit(0);
+        break;
+    }
+}
+
+int getWindowSize(int *rows, int *cols){
+    struct winsize ws;
+    
+    if(ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0){
+        return -1;
+    }
+    else{
+        *rows = ws.ws_row; 
+        *cols = ws.ws_col;
+
+        return 0;
+    }
+}
+
+void initEditor(){
+
+    if(getWindowSize(&E.screenRows, &E.screenCols) == -1){
+        death("GettingWindowSize");
+    }
+}
+
+/*** Outputs ***/
+void editorDrawRows (){
+    int y; 
+    for(y = 0; y < E.screenRows; y++){
+        write(STDIN_FILENO, "~\r\n",3);
+    }
+}
+
+void editorRefreshScreen(){
+    write(STDIN_FILENO, "\x1b[2J",4); // x1b : 1st byte escape sequence , followed by 3 bytes [2J , 4: # of bytes 
+    write(STDIN_FILENO, "\x1b[H", 3); // move cursor
+    editorDrawRows();
+    write(STDIN_FILENO, "\x1b[H", 3);
+}
+
+void editorPrompt(char *prompt, char *input, size_t size){
+    int i = 0 ;
+    char c;
+
+    write(STDIN_FILENO, prompt , strlen(prompt));
+    fflush(stdout);
+
+    while(1){
+        c = editorReadKey();
+
+        if(c == '\r' || c == '\n'){ // enters key -> null terminates 
+            input[i] = '\0';
+            break;
+        }
+        else if (c == 127 || c == '\b'){
+            if(i > 0){
+                i--;
+                write(STDIN_FILENO, "\b \b" , 3 );
+            }
+        }
+        else{
+            if(i < size-1){
+                input[i] = c;
+                i++;
+                write(STDIN_FILENO, &c, 1);
+            }
+        }
+        
+    }
+    write(STDIN_FILENO,"\n", 1);
+
+}
 
 int main (){
     enableRawMode();
+    initEditor();
 
     FILE *file_pointer ; 
     char input_text[1000]; // TODO: OUR Input should be able to write the entire file/ Large or no limit 
@@ -52,35 +152,34 @@ int main (){
 
 
     printf("Rich Editor!\n");
-    printf("Please Enter The Name of You're New File and End it with a '.txt': ");
-    scanf("%s",outfile_name);
+    editorPrompt("Please Enter The Name of You're New File and End it with a '.txt': ", outfile_name, sizeof(outfile_name) );
 
     int c; 
-    while((c = getchar()) != '\n' && c != EOF);// gets rid of trailing \n that would stay in the buffer
 
     file_pointer = fopen(outfile_name,"w"); // Pointer creates the output file 
 
-    printf("To stop writing to file press '~' key\n");
-
+    
     if(file_pointer == NULL){
-        exit(1);
+        death("Error opening file");
     }
-
+    
+    write(STDIN_FILENO,"To stop writing to file press CTRL + q\n", 35);
     char read_c ;
     while(1){ 
 
-        read_c = '\0';
-        if(read(STDIN_FILENO, &read_c, 1) == -1 && errno != EAGAIN){death("read");}
+        // read_c = '\0';
+        // if(read(STDIN_FILENO, &read_c, 1) == -1 && errno != EAGAIN){death("read");}
 
-        if(iscntrl(read_c)){
-            printf("%d\r\n",read_c);//tester
-        }
-        else{
-         //   fputc(read_c,file_pointer); // use putc because we used char to consume a char to read for end condition which we need to add back/ have it included in string
-            printf("%d, ('%c')\r\n",read_c,read_c);//tester
-        }
-        if(read_c == '~'){break;}
-       
+        // if(iscntrl(read_c)){
+        //     printf("%d\r\n",read_c);//tester
+        // }
+        // else{
+        //  //   fputc(read_c,file_pointer); // use putc because we used char to consume a char to read for end condition which we need to add back/ have it included in string
+        //     printf("%d, ('%c')\r\n",read_c,read_c);//tester
+        // }
+        // if(read_c == CTRL_KEY('`')){break;}
+        editorRefreshScreen();
+        editorProccessKey();
         
     }
 
