@@ -6,4 +6,6 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <errno.h>
+#include <string.h>
+// #include <sys/ioctl.h>
 #define CTRL_KEY(k) ((k) & 0x1f)

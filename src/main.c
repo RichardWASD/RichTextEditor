@@ -94,7 +94,7 @@ int getCursorPos(int *rows, int *cols){
 int getWindowSize(int *rows, int *cols){
     struct winsize ws;
     
-    if(1 ||ioctl(STDIN_FILENO, TIOCGWINSZ , &ws) == -1 || ws.ws_col == 0){
+    if(ioctl(STDIN_FILENO, TIOCGWINSZ , &ws) == -1 || ws.ws_col == 0){
         if(write(STDIN_FILENO, "\x1b[999C\x1b[999B" ,12) != 12){ // moves cursor bottom right 
             return -1;
         }
@@ -108,6 +108,26 @@ int getWindowSize(int *rows, int *cols){
     }
 }
 
+struct abuff{ // for dynamic strings
+    char *b;
+    int len;
+};
+#define ABUFF_INIT {NULL,0}
+
+void abuffApenned(struct abuff *ab, const char b, int len){
+    char *new = realloc(ab->b, ab->len +len);
+    
+    if(new == NULL){return;}
+    memcpy(&new[ab->len] , b , len);
+    ab->b = new;
+    ab->len += len;
+    
+}
+
+void abuffFree(struct abuff *ab){
+    free(ab->b);
+}
+
 void initEditor(){
 
     if(getWindowSize(&E.screenRows, &E.screenCols) == -1){
@@ -116,18 +136,26 @@ void initEditor(){
 }
 
 /*** Outputs ***/
-void editorDrawRows (){
+void editorDrawRows (struct abuff *ab){
     int y; 
     for(y = 0; y < E.screenRows; y++){
-        write(STDIN_FILENO, "~\r\n",3);
+        abuffApenned(ab, "~",1);
+
+        if(y < E.screenRows-1){
+            abuffApenned(ab, "\r\n", 2 );
+        }
     }
 }
 
 void editorRefreshScreen(){
-    write(STDIN_FILENO, "\x1b[2J",4); // x1b : 1st byte escape sequence , followed by 3 bytes [2J , 4: # of bytes 
-    write(STDIN_FILENO, "\x1b[H", 3); // move cursor
-    editorDrawRows();
-    write(STDIN_FILENO, "\x1b[H", 3);
+    struct abuff ab = ABUFF_INIT;
+    abuffApenned(&ab, "\x1b[2J",4); // x1b : 1st byte escape sequence , followed by 3 bytes [2J , 4: # of bytes 
+    abuffApenned(&ab, "\x1b[H", 3); // move cursor
+    editorDrawRows(&ab);
+    abuffApenned(&ab, "\x1b[H", 3);
+
+    write(STDOUT_FILENO, ab.b , ab.len);
+    abuffFree(&ab);
 }
 
 void editorPrompt(char *prompt, char *input, size_t size){
@@ -165,26 +193,26 @@ void editorPrompt(char *prompt, char *input, size_t size){
 
 int main (){
     
-    FILE *file_pointer ; 
+    //FILE *file_pointer ; 
     char input_text[1000]; // TODO: OUR Input should be able to write the entire file/ Large or no limit 
     char outfile_name[50];
     char ch; 
     
     
     
-    printf("Rich Editor!\n");
-    editorPrompt("Please Enter The Name of You're New File and End it with a '.txt': ", outfile_name, sizeof(outfile_name) );
+    //printf("Rich Editor!\n");
+    //editorPrompt("Please Enter The Name of You're New File and End it with a '.txt': ", outfile_name, sizeof(outfile_name) );
     
     int c; 
     
-    file_pointer = fopen(outfile_name,"w"); // Pointer creates the output file 
+    //file_pointer = fopen(outfile_name,"w"); // Pointer creates the output file 
     
     
-    if(file_pointer == NULL){
-        death("Error opening file");
-    }
+    // if(file_pointer == NULL){
+    //     death("Error opening file");
+    // }
     
-    write(STDIN_FILENO,"To stop writing to file press CTRL + q\n", 35);
+   // write(STDIN_FILENO,"To stop writing to file press CTRL + q\n", 35);
    
     enableRawMode();
     initEditor();
@@ -192,23 +220,12 @@ int main (){
     char read_c ;
     while(1){ 
 
-        // read_c = '\0';
-        // if(read(STDIN_FILENO, &read_c, 1) == -1 && errno != EAGAIN){death("read");}
-
-        // if(iscntrl(read_c)){
-        //     printf("%d\r\n",read_c);//tester
-        // }
-        // else{
-        //  //   fputc(read_c,file_pointer); // use putc because we used char to consume a char to read for end condition which we need to add back/ have it included in string
-        //     printf("%d, ('%c')\r\n",read_c,read_c);//tester
-        // }
-        // if(read_c == CTRL_KEY('`')){break;}
         editorRefreshScreen();
         editorProccessKey();
         
     }
 
-    fclose(file_pointer);
+//    fclose(file_pointer);
     return 0;
 }
 
