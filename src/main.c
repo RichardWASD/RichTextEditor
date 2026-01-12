@@ -114,8 +114,8 @@ struct abuff{ // for dynamic strings
 };
 #define ABUFF_INIT {NULL,0}
 
-void abuffApenned(struct abuff *ab, const char b, int len){
-    char *new = realloc(ab->b, ab->len +len);
+void abuffAppend(struct abuff *ab, const char *b, int len){
+    char *new = realloc(ab->b, ab->len +len); 
     
     if(new == NULL){return;}
     memcpy(&new[ab->len] , b , len);
@@ -139,21 +139,27 @@ void initEditor(){
 void editorDrawRows (struct abuff *ab){
     int y; 
     for(y = 0; y < E.screenRows; y++){
-        abuffApenned(ab, "~",1);
+        
 
+        abuffAppend(ab, "~",1);
+
+        abuffAppend(ab, "\x1b[K", 3);
         if(y < E.screenRows-1){
-            abuffApenned(ab, "\r\n", 2 );
+            abuffAppend(ab, "\r\n", 2 );
         }
     }
 }
 
 void editorRefreshScreen(){
     struct abuff ab = ABUFF_INIT;
-    abuffApenned(&ab, "\x1b[2J",4); // x1b : 1st byte escape sequence , followed by 3 bytes [2J , 4: # of bytes 
-    abuffApenned(&ab, "\x1b[H", 3); // move cursor
-    editorDrawRows(&ab);
-    abuffApenned(&ab, "\x1b[H", 3);
 
+    abuffAppend(&ab, "\x1b[?25l",6); // hide cursor before writing     
+     // x1b : 1st byte escape sequence , followed by 3 bytes [2J , 4: # of bytes 
+    abuffAppend(&ab, "\x1b[H", 3); // move cursor
+    editorDrawRows(&ab);
+    abuffAppend(&ab, "\x1b[H", 3);
+
+    abuffAppend(&ab, "\x1b[?25h",6);// Show cursor after write 
     write(STDOUT_FILENO, ab.b , ab.len);
     abuffFree(&ab);
 }
